@@ -1,0 +1,37 @@
+name: "Check"
+on:
+  pull_request:
+  push:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@main
+    - name: Setup Python
+      uses: actions/setup-python@main
+      with:
+        python-version: '3'
+    - name: Setup Poetry
+      uses: snok/install-poetry@main
+    - name: Poetry install
+      run: poetry install
+    - name: Poetry build
+      run: poetry build
+
+  format-check:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@main
+    - name: Setup Python
+      uses: actions/setup-python@main
+      with:
+        python-version: '3'
+    - name: Setup Poetry
+      uses: snok/install-poetry@main
+    - name: Poetry install
+      run: poetry install
+    - name: Format check
+      run: poetry run black . --check
