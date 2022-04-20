@@ -22,8 +22,8 @@
             pkgs = channels.nixpkgs;
           in
           rec {
-            packages.nix-gc-s3 = pkgs.callPackage ./nix-gc-s3.nix {};
-            devShells.default = pkgs.callPackage ./shell.nix {};
+            packages.nix-gc-s3 = pkgs.callPackage ./nix-gc-s3.nix { };
+            devShells.default = pkgs.callPackage ./shell.nix { };
             checks = packages;
           };
       };

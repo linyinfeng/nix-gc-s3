@@ -17,12 +17,12 @@ poetry2nix.mkPoetryApplication {
   overrides = poetry2nix.overrides.withDefaults (self: super: {
     # TODO remove when fixed
     pyparsing = super.pyparsing.overrideAttrs (old: {
-      propagatedBuildInputs = (old.propagedBuildInputs or []) ++[
+      propagatedBuildInputs = (old.propagedBuildInputs or [ ]) ++ [
         self.flit-core
       ];
     });
     platformdirs = super.pyparsing.overrideAttrs (old: {
-      propagatedBuildInputs = (old.propagedBuildInputs or []) ++[
+      propagatedBuildInputs = (old.propagedBuildInputs or [ ]) ++ [
         self.hatchling
       ];
     });
