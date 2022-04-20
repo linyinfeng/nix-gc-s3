@@ -1,11 +1,12 @@
 import click
 import click_log
 import boto3
-import itertools
+import tqdm
 import re
 import os
 import subprocess
 import logging
+from tqdm.contrib.logging import logging_redirect_tqdm
 
 logger = logging.getLogger(__name__)
 click_log.basic_config(logger)
@@ -22,14 +23,15 @@ click_log.basic_config(logger)
 )
 @click.option("--check-missing", is_flag=True, help="check missing key")
 @click.option("--dry-run", is_flag=True, help="run without delete anything")
+@click.option("--progress", is_flag=True, help="show a progress bar")
 @click_log.simple_verbosity_option(logger)
-def main(bucket, endpoint, roots, check_missing, dry_run):
+def main(bucket, endpoint, roots, check_missing, dry_run, progress):
     s3 = boto3.client("s3", endpoint_url=endpoint)
     cache_info = get_cache_info(s3, bucket)
     store_path = parse_store_path(cache_info)
 
     keys = set(cache_keys(s3, bucket))
-    live_keys = set(roots_keys(roots, store_path))
+    live_keys = roots_keys(roots, store_path)
     dead_keys = keys.difference(live_keys)
 
     if check_missing:
@@ -41,34 +43,88 @@ def main(bucket, endpoint, roots, check_missing, dry_run):
 
     for key in sorted(dead_keys):
         logger.info(f'find dead key "{key}"')
-    dead = get_nars(s3, bucket, dead_keys)
 
-    for item in dead:
+    if progress:
+        original_handlers = setup_tqdm_logging()
+    for item in tqdm.tqdm(
+        get_nars(s3, bucket, dead_keys), total=len(dead_keys), disable=not progress
+    ):
         # delete nar first
         delete_item(s3, bucket, item["nar"], dry_run)
         delete_item(s3, bucket, item["narinfo"], dry_run)
+    if progress:
+        restore_tqdm_logging(original_handlers)
+
+
+# taken from tqdm.contrib.logging
+class TqdmLoggingHandler(logging.StreamHandler):
+    def __init__(self):
+        super(TqdmLoggingHandler, self).__init__()
+
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            tqdm.tqdm.write(msg, file=self.stream)
+            self.flush()
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except:
+            self.handleError(record)
+
+
+def setup_tqdm_logging():
+    original_handlers = logger.handlers  # exactly one handler
+    assert len(original_handlers) == 1
+
+    original_handler = original_handlers[0]
+    tqdm_handler = TqdmLoggingHandler()
+    tqdm_handler.setFormatter(original_handler.formatter)
+    logger.handlers = [tqdm_handler]
+
+    return original_handlers
+
+
+def restore_tqdm_logging(handlers):
+    logger.handlers = handlers
 
 
 def roots_keys(roots, store_path):
-    return itertools.chain(*[root_keys(root, store_path) for root in roots])
+    result = set()
+    add_roots_keys(roots, store_path, result)
+    return result
 
 
-def root_keys(root, store_path):
+def add_roots_keys(roots, store_path, result):
+    for root in roots:
+        add_root_keys(root, store_path, result)
+
+
+def add_root_keys(root, store_path, result):
+    logger.debug(f"root_keys walk path: {root}")
+
+    # follow links for real path
     path = os.path.realpath(root)
-    logger.debug(f"root_keys walk path: {path}")
+    # already a store path
     if path.startswith(store_path):
-        for key in get_closure(path):
-            yield key
+        add_closure(path, result)
+    # a directory
     elif os.path.isdir(path):
         dirs = map(lambda d: d.path, os.scandir(path))
-        for k in roots_keys(dirs, store_path):
-            yield k
+        add_roots_keys(dirs, store_path, result)
+    # a regular file
+    elif os.path.isfile(path):
+        base = os.path.basename(path)
+        potential_store_path = os.path.join(store_path, base)
+        if os.path.exists(potential_store_path):
+            add_closure(potential_store_path, result)
 
 
-STORE_PATH_BASENAME_REGEX = re.compile("^(\w+)-(.*)$")
+def add_closure(path, result):
+    key = parse_key(path)
+    # already added
+    if key in result:
+        return
 
-
-def get_closure(path):
     query = subprocess.run(
         ["nix-store", "--query", "--requisites", path],
         stdout=subprocess.PIPE,
@@ -76,7 +132,11 @@ def get_closure(path):
     )
     stdout = bytes.decode(query.stdout, errors="strict")
     for line in stdout.splitlines():
-        yield parse_key(line)
+        key = parse_key(line)
+        result.add(key)
+
+
+STORE_PATH_BASENAME_REGEX = re.compile("^(\w+)-(.*)$")
 
 
 def parse_key(path):
