@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "nix-gc-s3"
-version = "0.0.1"
+version = "0.0.2"
 description = "A naive nix gc implementation for s3 store."
 authors = ["Lin Yinfeng <lin.yinfeng@outlook.com>"]
 license = "MIT"
@@ -10,10 +10,9 @@ nix-gc-s3 = "nix_gc_s3.main:main"
 
 [tool.poetry.dependencies]
 python = "^3.9"
-boto3 = "^1.21.43"
-click = "^8.1.2"
+boto3 = "^1.22.4"
+click = "^8.1.3"
 click-log = "^0.4.0"
-tqdm = "^4.64.0"
 
 [tool.poetry.dev-dependencies]
 poetryup = "^0.6.1"

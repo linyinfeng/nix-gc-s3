@@ -1,12 +1,11 @@
 import click
 import click_log
 import boto3
-import tqdm
 import re
 import os
 import subprocess
 import logging
-from tqdm.contrib.logging import logging_redirect_tqdm
+import itertools
 
 logger = logging.getLogger(__name__)
 click_log.basic_config(logger)
@@ -23,14 +22,13 @@ click_log.basic_config(logger)
 )
 @click.option("--check-missing", is_flag=True, help="check missing key")
 @click.option("--dry-run", is_flag=True, help="run without delete anything")
-@click.option("--progress", is_flag=True, help="show a progress bar")
 @click_log.simple_verbosity_option(logger)
-def main(bucket, endpoint, roots, check_missing, dry_run, progress):
+def main(bucket, endpoint, roots, check_missing, dry_run):
     s3 = boto3.client("s3", endpoint_url=endpoint)
     cache_info = get_cache_info(s3, bucket)
     store_path = parse_store_path(cache_info)
 
-    keys = set(cache_keys(s3, bucket))
+    keys = set(get_cache_keys(s3, bucket))
     live_keys = roots_keys(roots, store_path)
     dead_keys = keys.difference(live_keys)
 
@@ -40,20 +38,20 @@ def main(bucket, endpoint, roots, check_missing, dry_run, progress):
             logger.info(f"find missing key: {key}")
         if len(missing_keys) != 0:
             exit(1)
+    presented_live_keys = keys.intersection(live_keys)
 
     for key in sorted(dead_keys):
         logger.info(f'find dead key "{key}"')
 
-    if progress:
-        original_handlers = setup_tqdm_logging()
-    for item in tqdm.tqdm(
-        get_nars(s3, bucket, dead_keys), total=len(dead_keys), disable=not progress
-    ):
-        # delete nar first
-        delete_item(s3, bucket, item["nar"], dry_run)
-        delete_item(s3, bucket, item["narinfo"], dry_run)
-    if progress:
-        restore_tqdm_logging(original_handlers)
+    dead_nars = get_dead_nars(s3, bucket, presented_live_keys)
+    items_to_delete = list(
+        itertools.chain(dead_nars, map(lambda k: f"{k}.narinfo", dead_keys))
+    )
+
+    total = len(items_to_delete)
+    for i, item in enumerate(items_to_delete):
+        logger.info(f'[{i:{len(str(total))}}/{total}] deleting "{item}"...')
+        delete_item(s3, bucket, item, dry_run)
 
 
 # taken from tqdm.contrib.logging
@@ -161,7 +159,7 @@ def parse_store_path(cache_info_string):
     return match.group(1)
 
 
-def cache_keys(s3, bucket):
+def get_cache_keys(s3, bucket):
     s3_paginator = s3.get_paginator("list_objects_v2")
     suffix = ".narinfo"
     for page in s3_paginator.paginate(Bucket=bucket, Delimiter="/"):
@@ -171,8 +169,24 @@ def cache_keys(s3, bucket):
                 yield key.removesuffix(suffix)
 
 
-def get_nars(s3, bucket, keys):
-    return map(lambda k: get_nar(s3, bucket, k), keys)
+def get_all_nars(s3, bucket):
+    s3_paginator = s3.get_paginator("list_objects_v2")
+    for page in s3_paginator.paginate(Bucket=bucket, Prefix="nar/", Delimiter="/"):
+        for content in page.get("Contents", ()):
+            yield content["Key"]
+
+
+def get_dead_nars(s3, bucket, live_keys, progress=None):
+    all_nars = set(get_all_nars(s3, bucket))
+
+    live_nars = set()
+    total = len(live_keys)
+    for i, k in enumerate(live_keys):
+        logger.info(f'[{i:{len(str(total))}}/{total}] fetching "{k}.narinfo"...')
+        live_nars.add(get_nar(s3, bucket, k))
+
+    dead_nars = all_nars.difference(live_nars)
+    return dead_nars
 
 
 NARINFO_URL_REGEX = re.compile("^URL: (.*)$", flags=re.MULTILINE)
@@ -187,11 +201,10 @@ def get_nar(s3, bucket, key):
     logger.debug(narinfo_content)
     match = NARINFO_URL_REGEX.search(narinfo_content)
     url = match.group(1)
-    return {"narinfo": narinfo, "nar": url}
+    return url
 
 
 def delete_item(s3, bucket, item, dry_run):
-    logger.info(f'deleting "{item}"...')
     if not dry_run:
         response = s3.delete_object(Bucket=bucket, Key=item)
         logger.debug(response)
