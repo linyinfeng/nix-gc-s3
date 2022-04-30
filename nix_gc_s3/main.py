@@ -39,9 +39,10 @@ def main(bucket, endpoint, roots, check_missing, dry_run):
         if len(missing_keys) != 0:
             exit(1)
     presented_live_keys = keys.intersection(live_keys)
+    logger.info(f'narinfos: all({len(keys)}), live({len(presented_live_keys)}), dead({len(dead_keys)})')
 
     for key in sorted(dead_keys):
-        logger.info(f'find dead key "{key}"')
+        logger.debug(f'find dead key "{key}"')
 
     dead_nars = get_dead_nars(s3, bucket, presented_live_keys)
     items_to_delete = list(
@@ -50,40 +51,8 @@ def main(bucket, endpoint, roots, check_missing, dry_run):
 
     total = len(items_to_delete)
     for i, item in enumerate(items_to_delete):
-        logger.info(f'[{i:{len(str(total))}}/{total}] deleting "{item}"...')
+        logger.info(f'[{i + 1:{len(str(total))}}/{total}] deleting "{item}"...')
         delete_item(s3, bucket, item, dry_run)
-
-
-# taken from tqdm.contrib.logging
-class TqdmLoggingHandler(logging.StreamHandler):
-    def __init__(self):
-        super(TqdmLoggingHandler, self).__init__()
-
-    def emit(self, record):
-        try:
-            msg = self.format(record)
-            tqdm.tqdm.write(msg, file=self.stream)
-            self.flush()
-        except (KeyboardInterrupt, SystemExit):
-            raise
-        except:
-            self.handleError(record)
-
-
-def setup_tqdm_logging():
-    original_handlers = logger.handlers  # exactly one handler
-    assert len(original_handlers) == 1
-
-    original_handler = original_handlers[0]
-    tqdm_handler = TqdmLoggingHandler()
-    tqdm_handler.setFormatter(original_handler.formatter)
-    logger.handlers = [tqdm_handler]
-
-    return original_handlers
-
-
-def restore_tqdm_logging(handlers):
-    logger.handlers = handlers
 
 
 def roots_keys(roots, store_path):
@@ -182,10 +151,19 @@ def get_dead_nars(s3, bucket, live_keys, progress=None):
     live_nars = set()
     total = len(live_keys)
     for i, k in enumerate(live_keys):
-        logger.info(f'[{i:{len(str(total))}}/{total}] fetching "{k}.narinfo"...')
+        logger.info(f'[{i + 1:{len(str(total))}}/{total}] fetching "{k}.narinfo"...')
         live_nars.add(get_nar(s3, bucket, k))
 
+    for n in sorted(live_nars):
+        logger.debug(f'find live nar "{n}"')
+
     dead_nars = all_nars.difference(live_nars)
+
+    for n in sorted(dead_nars):
+        logger.debug(f'find dead nar "{n}"')
+
+    logger.info(f'nars: all({len(all_nars)}), live({len(live_nars)}), dead({len(dead_nars)})')
+
     return dead_nars
 
 
