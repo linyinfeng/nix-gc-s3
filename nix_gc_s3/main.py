@@ -39,7 +39,9 @@ def main(bucket, endpoint, roots, check_missing, dry_run):
         if len(missing_keys) != 0:
             exit(1)
     presented_live_keys = keys.intersection(live_keys)
-    logger.info(f'narinfos: all({len(keys)}), live({len(presented_live_keys)}), dead({len(dead_keys)})')
+    logger.info(
+        f"narinfos: all({len(keys)}), live({len(presented_live_keys)}), dead({len(dead_keys)})"
+    )
 
     for key in sorted(dead_keys):
         logger.debug(f'find dead key "{key}"')
@@ -162,7 +164,9 @@ def get_dead_nars(s3, bucket, live_keys, progress=None):
     for n in sorted(dead_nars):
         logger.debug(f'find dead nar "{n}"')
 
-    logger.info(f'nars: all({len(all_nars)}), live({len(live_nars)}), dead({len(dead_nars)})')
+    logger.info(
+        f"nars: all({len(all_nars)}), live({len(live_nars)}), dead({len(dead_nars)})"
+    )
 
     return dead_nars
 
