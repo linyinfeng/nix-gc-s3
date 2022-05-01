@@ -21,15 +21,19 @@ click_log.basic_config(logger)
     help="directory contains gc roots",
 )
 @click.option("--check-missing", is_flag=True, help="check missing key")
+@click.option("--all-live", is_flag=True, help="consider all keys live")
 @click.option("--dry-run", is_flag=True, help="run without delete anything")
 @click_log.simple_verbosity_option(logger)
-def main(bucket, endpoint, roots, check_missing, dry_run):
+def main(bucket, endpoint, roots, check_missing, all_live, dry_run):
     s3 = boto3.client("s3", endpoint_url=endpoint)
     cache_info = get_cache_info(s3, bucket)
     store_path = parse_store_path(cache_info)
 
     keys = set(get_cache_keys(s3, bucket))
-    live_keys = roots_keys(roots, store_path)
+    if all_live:
+        live_keys = keys
+    else:
+        live_keys = roots_keys(roots, store_path)
     dead_keys = keys.difference(live_keys)
 
     if check_missing:
@@ -39,16 +43,18 @@ def main(bucket, endpoint, roots, check_missing, dry_run):
         if len(missing_keys) != 0:
             exit(1)
     presented_live_keys = keys.intersection(live_keys)
+    dangling_keys, dead_nars = get_dead_nars(s3, bucket, presented_live_keys)
+    num_live = len(presented_live_keys) - len(dangling_keys)
     logger.info(
-        f"narinfos: all({len(keys)}), live({len(presented_live_keys)}), dead({len(dead_keys)})"
+        f"narinfos: all({len(keys)}), live({num_live}), dead({len(dead_keys)}), dangling({len(dangling_keys)})"
     )
 
-    for key in sorted(dead_keys):
-        logger.debug(f'find dead key "{key}"')
-
-    dead_nars = get_dead_nars(s3, bucket, presented_live_keys)
     items_to_delete = list(
-        itertools.chain(dead_nars, map(lambda k: f"{k}.narinfo", dead_keys))
+        itertools.chain(
+            map(lambda k: f"{k}.narinfo", dangling_keys),
+            dead_nars,
+            map(lambda k: f"{k}.narinfo", dead_keys),
+        )
     )
 
     total = len(items_to_delete)
@@ -150,11 +156,16 @@ def get_all_nars(s3, bucket):
 def get_dead_nars(s3, bucket, live_keys, progress=None):
     all_nars = set(get_all_nars(s3, bucket))
 
+    dangling_keys = set()
     live_nars = set()
     total = len(live_keys)
     for i, k in enumerate(live_keys):
         logger.info(f'[{i + 1:{len(str(total))}}/{total}] fetching "{k}.narinfo"...')
-        live_nars.add(get_nar(s3, bucket, k))
+        nar_url = get_nar(s3, bucket, k)
+        if nar_url not in all_nars:
+            dangling_keys.add(k)
+        else:
+            live_nars.add(nar_url)
 
     for n in sorted(live_nars):
         logger.debug(f'find live nar "{n}"')
@@ -168,7 +179,7 @@ def get_dead_nars(s3, bucket, live_keys, progress=None):
         f"nars: all({len(all_nars)}), live({len(live_nars)}), dead({len(dead_nars)})"
     )
 
-    return dead_nars
+    return dangling_keys, dead_nars
 
 
 NARINFO_URL_REGEX = re.compile("^URL: (.*)$", flags=re.MULTILINE)
