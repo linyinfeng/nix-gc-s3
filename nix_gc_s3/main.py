@@ -221,12 +221,9 @@ def get_nar(task):
     with counter.get_lock():
         counter.value += 1
         i = counter.value
-    worker_name = mp.current_process().name
 
     narinfo = f"{hash_str}.narinfo"
-    logger.info(
-        f"({worker_name}) [{i + 1:{len(str(total))}}/{total}] fetching {narinfo}..."
-    )
+    logger.info(f"[{i + 1:{len(str(total))}}/{total}] fetching {narinfo}...")
     response = s3_per_thread.get_object(Bucket=bucket, Key=narinfo)
     body = response["Body"]
     content = body.read()
