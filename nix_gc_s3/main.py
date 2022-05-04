@@ -21,8 +21,8 @@ click_log.basic_config(logger)
     type=click.Path(exists=True),
     help="directory contains gc roots",
 )
-@click.option("--check-missing", is_flag=True, help="check missing key")
-@click.option("--all-live", is_flag=True, help="consider all keys live")
+@click.option("--check-missing", is_flag=True, help="check missing store path")
+@click.option("--all-live", is_flag=True, help="consider all narinfos live")
 @click.option("--jobs", type=int, default=1, help="number of parallel jobs")
 @click.option("--dry-run", is_flag=True, help="run without delete anything")
 @click_log.simple_verbosity_option(logger)
@@ -31,33 +31,35 @@ def main(bucket, endpoint, roots, check_missing, all_live, jobs, dry_run):
     cache_info = get_cache_info(s3, bucket)
     store_path = parse_store_path(cache_info)
 
-    keys = set(get_cache_keys(s3, bucket))
+    logger.info("listing remote hashes...")
+    hashes = set(get_cache_hashes(s3, bucket))
     if all_live:
-        live_keys = keys
+        live_hashes = hashes
     else:
-        live_keys = roots_keys(roots, store_path)
-    dead_keys = keys.difference(live_keys)
+        logger.info("gathering roots hashes...")
+        live_hashes = roots_hashes(roots, store_path)
+    dead_hashes = hashes.difference(live_hashes)
 
     if check_missing:
-        missing_keys = live_keys.difference(keys)
-        for key in sorted(missing_keys):
-            logger.info(f"find missing key: {key}")
-        if len(missing_keys) != 0:
+        missing_hashes = live_hashes.difference(hashes)
+        for h in sorted(missing_hashes):
+            logger.info(f"find missing store hash: {h}")
+        if len(missing_hashes) != 0:
             exit(1)
-    presented_live_keys = keys.intersection(live_keys)
-    dangling_keys, dead_nars = get_dead_nars(
-        s3, endpoint, bucket, presented_live_keys, jobs
+    presented_live_hashes = hashes.intersection(live_hashes)
+    dangling_hashes, dead_nars = get_dead_nars(
+        s3, endpoint, bucket, presented_live_hashes, jobs
     )
-    num_live = len(presented_live_keys) - len(dangling_keys)
+    num_live = len(presented_live_hashes) - len(dangling_hashes)
     logger.info(
-        f"narinfos: all({len(keys)}), live({num_live}), dead({len(dead_keys)}), dangling({len(dangling_keys)})"
+        f"narinfos: all({len(hashes)}), live({num_live}), dead({len(dead_hashes)}), dangling({len(dangling_hashes)})"
     )
 
     items_to_delete = list(
         itertools.chain(
-            map(lambda k: f"{k}.narinfo", dangling_keys),
+            map(lambda k: f"{k}.narinfo", dangling_hashes),
             dead_nars,
-            map(lambda k: f"{k}.narinfo", dead_keys),
+            map(lambda k: f"{k}.narinfo", dead_hashes),
         )
     )
 
@@ -69,19 +71,19 @@ def get_s3_client(endpoint):
     return session.client("s3", endpoint_url=endpoint)
 
 
-def roots_keys(roots, store_path):
+def roots_hashes(roots, store_path):
     result = set()
-    add_roots_keys(roots, store_path, result)
+    add_roots_hashes(roots, store_path, result)
     return result
 
 
-def add_roots_keys(roots, store_path, result):
+def add_roots_hashes(roots, store_path, result):
     for root in roots:
-        add_root_keys(root, store_path, result)
+        add_root_hashes(root, store_path, result)
 
 
-def add_root_keys(root, store_path, result):
-    logger.debug(f"root_keys walk path: {root}")
+def add_root_hashes(root, store_path, result):
+    logger.debug(f"add_root_hashes walk path: {root}")
 
     # follow links for real path
     path = os.path.realpath(root)
@@ -91,7 +93,7 @@ def add_root_keys(root, store_path, result):
     # a directory
     elif os.path.isdir(path):
         dirs = map(lambda d: d.path, os.scandir(path))
-        add_roots_keys(dirs, store_path, result)
+        add_roots_hashes(dirs, store_path, result)
     # a regular file
     elif os.path.isfile(path):
         base = os.path.basename(path)
@@ -101,9 +103,9 @@ def add_root_keys(root, store_path, result):
 
 
 def add_closure(path, result):
-    key = parse_key(path)
+    h = parse_path_hash(path)
     # already added
-    if key in result:
+    if h in result:
         return
 
     query = subprocess.run(
@@ -113,18 +115,16 @@ def add_closure(path, result):
     )
     stdout = bytes.decode(query.stdout, errors="strict")
     for line in stdout.splitlines():
-        key = parse_key(line)
-        result.add(key)
+        result.add(parse_path_hash(line))
 
 
 STORE_PATH_BASENAME_REGEX = re.compile("^(\w+)-(.*)$")
 
 
-def parse_key(path):
+def parse_path_hash(path):
     base = os.path.basename(path)
     match = STORE_PATH_BASENAME_REGEX.match(base)
-    key = match.group(1)
-    return key
+    return match.group(1)
 
 
 def get_cache_info(s3, bucket):
@@ -142,7 +142,7 @@ def parse_store_path(cache_info_string):
     return match.group(1)
 
 
-def get_cache_keys(s3, bucket):
+def get_cache_hashes(s3, bucket):
     s3_paginator = s3.get_paginator("list_objects_v2")
     suffix = ".narinfo"
     for page in s3_paginator.paginate(Bucket=bucket, Delimiter="/"):
@@ -159,16 +159,18 @@ def get_all_nars(s3, bucket):
             yield content["Key"]
 
 
-def get_dead_nars(s3, endpoint, bucket, live_keys, jobs):
+def get_dead_nars(s3, endpoint, bucket, live_hashes, jobs):
+    logger.info("listing remote nar archives...")
     all_nars = set(get_all_nars(s3, bucket))
 
-    dangling_keys = set()
+    dangling_hashes = set()
     live_nars = set()
-    results = get_nars(endpoint, bucket, live_keys, jobs)
+    logger.info("fetching live narinfos...")
+    results = get_nars(endpoint, bucket, live_hashes, jobs)
     for result in results:
         nar_url = result["nar_url"]
         if nar_url not in all_nars:
-            dangling_keys.add(result["key"])
+            dangling_hashes.add(result["hash"])
         else:
             live_nars.add(nar_url)
 
@@ -184,23 +186,23 @@ def get_dead_nars(s3, endpoint, bucket, live_keys, jobs):
         f"nars: all({len(all_nars)}), live({len(live_nars)}), dead({len(dead_nars)})"
     )
 
-    return dangling_keys, dead_nars
+    return dangling_hashes, dead_nars
 
 
 NARINFO_URL_REGEX = re.compile("^URL: (.*)$", flags=re.MULTILINE)
 
 
-def get_nars(endpoint, bucket, keys, jobs):
+def get_nars(endpoint, bucket, hashes, jobs):
     with mp.Pool(
         jobs, initializer=initialize_download_threads, initargs=(endpoint,)
     ) as pool:
-        total = len(keys)
+        total = len(hashes)
 
         def build_task(args):
-            i, key = args
-            return (bucket, key, i, total)
+            i, hash_str = args
+            return (bucket, hash_str, i, total)
 
-        tasks = map(build_task, enumerate(keys))
+        tasks = map(build_task, enumerate(hashes))
         return pool.map(get_nar, tasks)
 
 
@@ -210,9 +212,9 @@ def initialize_download_threads(endpoint):
 
 
 def get_nar(task):
-    bucket, key, i, total = task
+    bucket, hash_str, i, total = task
     global s3_per_thread
-    narinfo = f"{key}.narinfo"
+    narinfo = f"{hash_str}.narinfo"
     logger.info(f"[{i + 1:{len(str(total))}}/{total}] fetching {narinfo}...")
     response = s3_per_thread.get_object(Bucket=bucket, Key=narinfo)
     body = response["Body"]
@@ -221,7 +223,7 @@ def get_nar(task):
     logger.debug(narinfo_content)
     match = NARINFO_URL_REGEX.search(narinfo_content)
     url = match.group(1)
-    return {"key": key, "nar_url": url}
+    return {"hash": hash_str, "nar_url": url}
 
 
 def delete_items(s3, bucket, items, dry_run):
