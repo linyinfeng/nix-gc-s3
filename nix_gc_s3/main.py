@@ -7,6 +7,7 @@ import subprocess
 import logging
 import itertools
 import multiprocessing as mp
+import ctypes
 
 logger = logging.getLogger(__name__)
 click_log.basic_config(logger)
@@ -193,29 +194,39 @@ NARINFO_URL_REGEX = re.compile("^URL: (.*)$", flags=re.MULTILINE)
 
 
 def get_nars(endpoint, bucket, hashes, jobs):
+    counter = mp.Value(ctypes.c_size_t)
     with mp.Pool(
-        jobs, initializer=initialize_download_threads, initargs=(endpoint,)
+        jobs, initializer=initialize_download_threads, initargs=(endpoint, counter)
     ) as pool:
         total = len(hashes)
 
-        def build_task(args):
-            i, hash_str = args
-            return (bucket, hash_str, i, total)
+        def build_task(hash_str):
+            return (bucket, hash_str, total)
 
-        tasks = map(build_task, enumerate(hashes))
+        tasks = map(build_task, hashes)
         return pool.map(get_nar, tasks)
 
 
-def initialize_download_threads(endpoint):
+def initialize_download_threads(endpoint, init_counter):
     global s3_per_thread
+    global counter
     s3_per_thread = get_s3_client(endpoint)
+    counter = init_counter
 
 
 def get_nar(task):
-    bucket, hash_str, i, total = task
+    bucket, hash_str, total = task
     global s3_per_thread
+    global counter
+    with counter.get_lock():
+        counter.value += 1
+        i = counter.value
+    worker_name = mp.current_process().name
+
     narinfo = f"{hash_str}.narinfo"
-    logger.info(f"[{i + 1:{len(str(total))}}/{total}] fetching {narinfo}...")
+    logger.info(
+        f"({worker_name}) [{i + 1:{len(str(total))}}/{total}] fetching {narinfo}..."
+    )
     response = s3_per_thread.get_object(Bucket=bucket, Key=narinfo)
     body = response["Body"]
     content = body.read()
