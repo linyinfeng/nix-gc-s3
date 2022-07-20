@@ -219,8 +219,8 @@ def get_nar(task):
     global s3_per_thread
     global counter
     with counter.get_lock():
-        counter.value += 1
         i = counter.value
+        counter.value += 1
 
     narinfo = f"{hash_str}.narinfo"
     logger.info(f"[{i + 1:{len(str(total))}}/{total}] fetching {narinfo}...")
