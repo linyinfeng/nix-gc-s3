@@ -2,9 +2,12 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     flake-utils-plus.url = "github:gytis-ivaskevicius/flake-utils-plus";
+    poetry2nix.url = "github:nix-community/poetry2nix";
+    poetry2nix.inputs.nixpkgs.follows = "nixpkgs";
+    poetry2nix.inputs.flake-utils.follows = "flake-utils-plus/flake-utils";
   };
 
-  outputs = { self, nixpkgs, flake-utils-plus }@inputs:
+  outputs = { self, nixpkgs, flake-utils-plus, poetry2nix }@inputs:
     let
       utils = flake-utils-plus.lib;
       inherit (nixpkgs) lib;
@@ -16,6 +19,9 @@
         channelsConfig = {
           allowAliases = false;
         };
+        channels.nixpkgs.overlaysBuilder = channels: [
+          poetry2nix.overlay
+        ];
 
         outputsBuilder = channels:
           let

@@ -15,17 +15,6 @@ poetry2nix.mkPoetryApplication {
   poetrylock = ./poetry.lock;
 
   overrides = poetry2nix.overrides.withDefaults (self: super: {
-    # TODO remove when fixed
-    pyparsing = super.pyparsing.overrideAttrs (old: {
-      propagatedBuildInputs = (old.propagedBuildInputs or [ ]) ++ [
-        self.flit-core
-      ];
-    });
-    platformdirs = super.pyparsing.overrideAttrs (old: {
-      propagatedBuildInputs = (old.propagedBuildInputs or [ ]) ++ [
-        self.hatchling
-      ];
-    });
     # TODO just a workaround
     # poetryup is just a dev dependency
     # and it is currently broken
