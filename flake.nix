@@ -31,7 +31,7 @@
             packages.nix-gc-s3 = pkgs.callPackage ./nix-gc-s3.nix { };
             packages.default = packages.nix-gc-s3;
             devShells.default = pkgs.callPackage ./shell.nix { };
-            checks = packages;
+            checks = packages // devShells;
           };
       };
 }

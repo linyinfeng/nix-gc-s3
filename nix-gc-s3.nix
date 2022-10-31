@@ -1,12 +1,5 @@
 { stdenvNoCC, poetry2nix, lib }:
 
-let
-  empty = stdenvNoCC.mkDerivation {
-    name = "empty";
-    dontUnpack = true;
-    installPhase = "mkdir $out";
-  };
-in
 poetry2nix.mkPoetryApplication {
   pname = "poetry";
   version = "master";
@@ -15,11 +8,7 @@ poetry2nix.mkPoetryApplication {
   poetrylock = ./poetry.lock;
 
   overrides = poetry2nix.overrides.withDefaults (self: super: {
-    # TODO just a workaround
-    # poetryup is just a dev dependency
-    # and it is currently broken
-    poetryup = empty;
-    black = empty;
+    # currently empty
   });
 
   meta = with lib; {

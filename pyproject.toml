@@ -15,7 +15,6 @@ click = "*"
 click-log = "*"
 
 [tool.poetry.dev-dependencies]
-poetryup = "*"
 black = "*"
 
 [build-system]
