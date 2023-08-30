@@ -1,37 +1,54 @@
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    flake-utils-plus.url = "github:gytis-ivaskevicius/flake-utils-plus";
+    flake-parts.url = "github:hercules-ci/flake-parts";
+    flake-parts.inputs.nixpkgs-lib.follows = "nixpkgs";
     poetry2nix.url = "github:nix-community/poetry2nix";
     poetry2nix.inputs.nixpkgs.follows = "nixpkgs";
-    poetry2nix.inputs.flake-utils.follows = "flake-utils-plus/flake-utils";
+    poetry2nix.inputs.flake-utils.follows = "flake-utils";
+    devshell.url = "github:numtide/devshell";
+    devshell.inputs.nixpkgs.follows = "nixpkgs";
+    devshell.inputs.systems.follows = "flake-utils/systems";
+    treefmt-nix.url = "github:numtide/treefmt-nix";
+    treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
+    flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nixpkgs, flake-utils-plus, poetry2nix }@inputs:
-    let
-      utils = flake-utils-plus.lib;
-      inherit (nixpkgs) lib;
-    in
-    utils.mkFlake
-      {
-        inherit self inputs;
+  outputs = inputs @ {flake-parts, ...}:
+    flake-parts.lib.mkFlake {inherit inputs;}
+    {
+      systems = [
+        "x86_64-linux"
+        "aarch64-linux"
+      ];
+      imports = [
+        inputs.flake-parts.flakeModules.easyOverlay
+        inputs.devshell.flakeModule
+        inputs.treefmt-nix.flakeModule
+      ];
+      perSystem = {
+        self',
+        pkgs,
+        ...
+      }: {
+        packages.nix-gc-s3 = pkgs.callPackage ./nix-gc-s3.nix {};
+        packages.default = self'.packages.nix-gc-s3;
+        checks = self'.packages // self'.devShells;
 
-        channelsConfig = {
-          allowAliases = false;
-        };
-        channels.nixpkgs.overlaysBuilder = channels: [
-          poetry2nix.overlay
-        ];
-
-        outputsBuilder = channels:
-          let
-            pkgs = channels.nixpkgs;
-          in
-          rec {
-            packages.nix-gc-s3 = pkgs.callPackage ./nix-gc-s3.nix { };
-            packages.default = packages.nix-gc-s3;
-            devShells.default = pkgs.callPackage ./shell.nix { };
-            checks = packages // devShells;
+        treefmt = {
+          projectRootFile = "flake.nix";
+          programs = {
+            alejandra.enable = true;
+            black.enable = true;
           };
+        };
+
+        devshells.default = {
+          devshell.name = "nix-gc-s3";
+          commands = [
+            {package = pkgs.poetry;}
+          ];
+        };
       };
+    };
 }
