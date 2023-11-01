@@ -9,7 +9,7 @@ license = "MIT"
 nix-gc-s3 = "nix_gc_s3.main:main"
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "^3.11"
 boto3 = "*"
 click = "*"
 click-log = "*"

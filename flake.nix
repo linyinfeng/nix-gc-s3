@@ -6,21 +6,24 @@
     poetry2nix.url = "github:nix-community/poetry2nix";
     poetry2nix.inputs.nixpkgs.follows = "nixpkgs";
     poetry2nix.inputs.flake-utils.follows = "flake-utils";
+    poetry2nix.inputs.nix-github-actions.follows = "blank";
+    poetry2nix.inputs.systems.follows = "systems";
+    poetry2nix.inputs.treefmt-nix.follows = "treefmt-nix";
     devshell.url = "github:numtide/devshell";
     devshell.inputs.nixpkgs.follows = "nixpkgs";
     devshell.inputs.systems.follows = "flake-utils/systems";
     treefmt-nix.url = "github:numtide/treefmt-nix";
     treefmt-nix.inputs.nixpkgs.follows = "nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
+    flake-utils.inputs.systems.follows = "systems";
+    blank.url = "github:divnix/blank";
+    systems.url = "github:nix-systems/default";
   };
 
   outputs = inputs @ {flake-parts, ...}:
     flake-parts.lib.mkFlake {inherit inputs;}
-    {
-      systems = [
-        "x86_64-linux"
-        "aarch64-linux"
-      ];
+    ({inputs, ...}: {
+      systems = import inputs.systems;
       imports = [
         inputs.flake-parts.flakeModules.easyOverlay
         inputs.devshell.flakeModule
@@ -30,8 +33,10 @@
         self',
         pkgs,
         ...
-      }: {
-        packages.nix-gc-s3 = pkgs.callPackage ./nix-gc-s3.nix {};
+      }: let
+        poetry2nix = inputs.poetry2nix.lib.mkPoetry2Nix {inherit pkgs;};
+      in {
+        packages.nix-gc-s3 = pkgs.callPackage ./nix-gc-s3.nix {inherit poetry2nix;};
         packages.default = self'.packages.nix-gc-s3;
         checks = self'.packages // self'.devShells;
 
@@ -50,5 +55,5 @@
           ];
         };
       };
-    };
+    });
 }
