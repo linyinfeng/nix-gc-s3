@@ -46,11 +46,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1698579227,
-        "narHash": "sha256-KVWjFZky+gRuWennKsbo6cWyo7c/z/VgCte5pR9pEKg=",
+        "lastModified": 1698882062,
+        "narHash": "sha256-HkhafUayIqxXyHH1X8d9RDl1M2CkFgZLjKD3MzabiEo=",
         "owner": "hercules-ci",
         "repo": "flake-parts",
-        "rev": "f76e870d64779109e41370848074ac4eaa1606ec",
+        "rev": "8c9fa2545007b49a5db5f650ae91f227672c3877",
         "type": "github"
       },
       "original": {
@@ -114,11 +114,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1698827751,
-        "narHash": "sha256-24zEKQqpgolmJGR9Zvaha/361BIGeMPh5aU5oReLL0k=",
+        "lastModified": 1698873888,
+        "narHash": "sha256-ZIJ7IS38DQ52JL6Zxbs7F6iXardwEAAz1PQrZfyFmTU=",
         "owner": "nix-community",
         "repo": "poetry2nix",
-        "rev": "4099e32cb94b586fd3d213465942111964ff50ff",
+        "rev": "566e2cdc8c90969f5a165aa6c4e863df2c3fefd7",
         "type": "github"
       },
       "original": {
