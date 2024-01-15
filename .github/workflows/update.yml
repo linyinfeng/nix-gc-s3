@@ -32,14 +32,14 @@ jobs:
     - name: Nix flake update
       run: |
         nix flake update --commit-lock-file
-    - name: Cargo update
+    - name: Poetry update
       run: |
         nix develop --command poetry update
         if [ -z $(git status --porcelain) ]; then
           echo "clean, skip..."
         else
           git add --all
-          git commit --message "Cargo update"
+          git commit --message "Poetry update"
         fi
     - name: Nix flake check
       run: |
