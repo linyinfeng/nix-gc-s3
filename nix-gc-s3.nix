@@ -1,7 +1,4 @@
-{
-  poetry2nix,
-  lib,
-}:
+{ poetry2nix, lib }:
 poetry2nix.mkPoetryApplication {
   pname = "poetry";
   version = "master";
@@ -9,14 +6,16 @@ poetry2nix.mkPoetryApplication {
   pyproject = ./pyproject.toml;
   poetrylock = ./poetry.lock;
 
-  overrides = poetry2nix.overrides.withDefaults (self: super: {
-    # currently empty
-  });
+  overrides = poetry2nix.overrides.withDefaults (
+    self: super: {
+      # currently empty
+    }
+  );
 
   meta = with lib; {
     homepage = "https://github.com/linyinfeng/nix-gc-s3";
     description = "A naive tool to perform garbage collecting on nix S3 stores";
     license = licenses.mit;
-    maintainers = with maintainers; [yinfeng];
+    maintainers = with maintainers; [ yinfeng ];
   };
 }

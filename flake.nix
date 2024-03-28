@@ -20,42 +20,48 @@
     systems.url = "github:nix-systems/default";
   };
 
-  outputs = inputs @ {flake-parts, ...}:
-    flake-parts.lib.mkFlake {inherit inputs;}
-    ({inputs, ...}: {
-      systems = import inputs.systems;
-      imports = [
-        inputs.flake-parts.flakeModules.easyOverlay
-        inputs.devshell.flakeModule
-        inputs.treefmt-nix.flakeModule
-      ];
-      perSystem = {
-        config,
-        self',
-        pkgs,
-        ...
-      }: let
-        poetry2nix = inputs.poetry2nix.lib.mkPoetry2Nix {inherit pkgs;};
-      in {
-        packages.nix-gc-s3 = pkgs.callPackage ./nix-gc-s3.nix {inherit poetry2nix;};
-        packages.default = self'.packages.nix-gc-s3;
-        checks = self'.packages // self'.devShells;
-        overlayAttrs = {inherit (config.packages) nix-gc-s3;};
+  outputs =
+    inputs@{ flake-parts, ... }:
+    flake-parts.lib.mkFlake { inherit inputs; } (
+      { inputs, ... }:
+      {
+        systems = import inputs.systems;
+        imports = [
+          inputs.flake-parts.flakeModules.easyOverlay
+          inputs.devshell.flakeModule
+          inputs.treefmt-nix.flakeModule
+        ];
+        perSystem =
+          {
+            config,
+            self',
+            pkgs,
+            ...
+          }:
+          let
+            poetry2nix = inputs.poetry2nix.lib.mkPoetry2Nix { inherit pkgs; };
+          in
+          {
+            packages.nix-gc-s3 = pkgs.callPackage ./nix-gc-s3.nix { inherit poetry2nix; };
+            packages.default = self'.packages.nix-gc-s3;
+            checks = self'.packages // self'.devShells;
+            overlayAttrs = {
+              inherit (config.packages) nix-gc-s3;
+            };
 
-        treefmt = {
-          projectRootFile = "flake.nix";
-          programs = {
-            alejandra.enable = true;
-            black.enable = true;
+            treefmt = {
+              projectRootFile = "flake.nix";
+              programs = {
+                nixfmt-rfc-style.enable = true;
+                black.enable = true;
+              };
+            };
+
+            devshells.default = {
+              devshell.name = "nix-gc-s3";
+              commands = [ { package = pkgs.poetry; } ];
+            };
           };
-        };
-
-        devshells.default = {
-          devshell.name = "nix-gc-s3";
-          commands = [
-            {package = pkgs.poetry;}
-          ];
-        };
-      };
-    });
+      }
+    );
 }
