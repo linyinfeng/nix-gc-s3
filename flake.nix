@@ -30,6 +30,7 @@
         inputs.treefmt-nix.flakeModule
       ];
       perSystem = {
+        config,
         self',
         pkgs,
         ...
@@ -39,6 +40,7 @@
         packages.nix-gc-s3 = pkgs.callPackage ./nix-gc-s3.nix {inherit poetry2nix;};
         packages.default = self'.packages.nix-gc-s3;
         checks = self'.packages // self'.devShells;
+        overlayAttrs = {inherit (config.packages) nix-gc-s3;};
 
         treefmt = {
           projectRootFile = "flake.nix";
