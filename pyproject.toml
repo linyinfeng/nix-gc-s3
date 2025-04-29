@@ -14,7 +14,7 @@ boto3 = "*"
 click = "*"
 click-log = "*"
 
-[tool.poetry.dev-dependencies]
+# [tool.poetry.dev-dependencies]
 # currently nothing
 
 [build-system]
