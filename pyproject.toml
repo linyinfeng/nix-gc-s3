@@ -15,7 +15,7 @@ click = "*"
 click-log = "*"
 
 [tool.poetry.dev-dependencies]
-black = "*"
+# currently nothing
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
