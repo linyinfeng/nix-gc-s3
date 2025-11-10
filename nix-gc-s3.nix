@@ -3,6 +3,7 @@ poetry2nix.mkPoetryApplication {
   pname = "poetry";
   version = "master";
   projectDir = ./.;
+  src = ./.; # TODO remove, evaluation failure on hydra
   pyproject = ./pyproject.toml;
   poetrylock = ./poetry.lock;
 
