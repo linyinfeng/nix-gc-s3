@@ -49,6 +49,7 @@
         ];
         perSystem =
           {
+            config,
             self',
             pkgs,
             pythonSet,
@@ -104,7 +105,9 @@
                 };
                 default = self'.packages.nix-gc-s3;
               };
-
+            overlayAttrs = {
+              inherit (config.packages) nix-gc-s3;
+            };
             checks = {
               nix-gc-s3 = self'.packages.nix-gc-s3;
             };
