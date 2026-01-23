@@ -119,7 +119,7 @@ def add_closure(path, result):
         result.add(parse_path_hash(line))
 
 
-STORE_PATH_BASENAME_REGEX = re.compile("^(\w+)-(.*)$")
+STORE_PATH_BASENAME_REGEX = re.compile(r"^(\w+)-(.*)$")
 
 
 def parse_path_hash(path):

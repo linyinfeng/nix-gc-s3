@@ -1,22 +1,15 @@
-[tool.poetry]
+[project]
 name = "nix-gc-s3"
 version = "0.0.2"
 description = "A naive nix gc implementation for s3 store."
-authors = ["Lin Yinfeng <lin.yinfeng@outlook.com>"]
+authors = [{ name = "Lin Yinfeng", email = "lin.yinfeng@outlook.com" }]
+requires-python = ">=3.11,<4"
 license = "MIT"
+dependencies = ["boto3", "click", "click-log"]
 
-[tool.poetry.scripts]
+[project.scripts]
 nix-gc-s3 = "nix_gc_s3.main:main"
 
-[tool.poetry.dependencies]
-python = "^3.11"
-boto3 = "*"
-click = "*"
-click-log = "*"
-
-# [tool.poetry.dev-dependencies]
-# currently nothing
-
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["uv_build>=0.9.26,<0.10.0"]
+build-backend = "uv_build"

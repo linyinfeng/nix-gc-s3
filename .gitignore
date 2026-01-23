@@ -4,3 +4,5 @@ dist
 result
 .direnv
 result*
+.venv
+.mypy_cache
